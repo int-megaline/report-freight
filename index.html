@@ -281,7 +281,11 @@ footer.page-foot{
 .auth-error{ font-size:12.5px; color:var(--warn); margin:10px 0 0; }
 .auth-forgot{ display:block; text-align:center; font-size:12.5px; color:var(--muted); margin-top:14px; text-decoration:none; }
 .auth-forgot:hover{ color:var(--cat-power); text-decoration:underline; }
-.auth-logout-btn{ color:var(--ink-soft); }
+.auth-logout-btn{
+  height:36px; padding:0 14px; border-radius:8px; border:1px solid var(--line-strong);
+  background:var(--panel); color:var(--ink-soft); font-family:var(--font-sans); font-size:12.5px;
+  font-weight:600; cursor:pointer; white-space:nowrap;
+}
 .auth-logout-btn:hover{ background:var(--cat-power); border-color:var(--cat-power); color:#fff; }
 </style>
 </head>
@@ -618,6 +622,44 @@ const NO_ROTATE = { maxRotation:0, minRotation:0, autoSkip:true };
 function barDS(label, data, color, fill, extra){
   return Object.assign({label, data, backgroundColor: fill, borderColor: color, borderWidth:1.5, borderRadius:3, borderSkipped:false}, extra||{});
 }
+/* draws a vertical divider between groups of `groupSize` categories on a
+   categorical x-axis, plus a small "{year}년" header centered over each
+   group -- used to split a combined 2025/2026 bar chart without repeating
+   the year in every tick label */
+function yearGroupPlugin(years, groupSize){
+  return {
+    id: 'yearGroupDivider',
+    afterDraw(chart){
+      const {ctx, chartArea, scales} = chart;
+      const xScale = scales.x;
+      if(!xScale || !chartArea) return;
+      const c = chartColors();
+      ctx.save();
+      for(let g=1; g<years.length; g++){
+        const leftIdx = g*groupSize - 1, rightIdx = g*groupSize;
+        const xPix = (xScale.getPixelForValue(leftIdx) + xScale.getPixelForValue(rightIdx)) / 2;
+        ctx.beginPath();
+        ctx.strokeStyle = c.grid.replace(/[\d.]+\)$/, '0.9)') || c.grid;
+        ctx.setLineDash([4,4]);
+        ctx.lineWidth = 1;
+        ctx.moveTo(xPix, chartArea.top);
+        ctx.lineTo(xPix, chartArea.bottom);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle = c.text;
+      ctx.font = "600 11px -apple-system,Pretendard,'Malgun Gothic','Segoe UI',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      years.forEach((yr,g)=>{
+        const startIdx = g*groupSize, endIdx = g*groupSize+groupSize-1;
+        const xCenter = (xScale.getPixelForValue(startIdx) + xScale.getPixelForValue(endIdx)) / 2;
+        ctx.fillText(yr+'년', xCenter, chartArea.top - 8);
+      });
+      ctx.restore();
+    }
+  };
+}
 function baseScales(extra){
   const c = chartColors();
   const s = {
@@ -759,12 +801,13 @@ function buildVesselCharts(){
   });
   makeChart("chartCharterStack", {
     type:'bar',
+    plugins:[yearGroupPlugin(years, vessels.length)],
     data:{ labels, datasets:[
       barDS('고정', fixed, c.blue, c.blueFill, {stack:'s'}),
       barDS('연료비', fuel, c.green, c.greenFill, {stack:'s'}),
       barDS('운항비(기타포함)', opex, c.pink, c.pinkFill, {stack:'s'}),
     ]},
-    options: baseOptions({ scales: baseScales({ x:{ stacked:true, grid:{display:false}, ticks:Object.assign({color:c.text},NO_ROTATE) }, y:{ stacked:true, ticks:{color:c.text, callback:(v)=>v+'억'} } }) })
+    options: baseOptions({ layout:{padding:{top:22}}, scales: baseScales({ x:{ stacked:true, grid:{display:false}, ticks:Object.assign({color:c.text, callback:(v,i)=>vessels[i%vessels.length]},NO_ROTATE) }, y:{ stacked:true, ticks:{color:c.text, callback:(v)=>v+'억'} } }) })
   });
 
   const voyLabels = [];
@@ -782,11 +825,12 @@ function buildVesselCharts(){
   });
   makeChart("chartCharterVoy", {
     type:'bar',
+    plugins:[yearGroupPlugin(years, vessels.length)],
     data:{ labels: voyLabels, datasets:[
       barDS('항차 수', voy, c.blue, c.blueFill),
       barDS('재입항', reentry, c.pink, c.pinkFill),
     ]},
-    options: baseOptions({ scales: baseScales({ x:{ grid:{display:false}, ticks:Object.assign({color:c.text},NO_ROTATE) } }) })
+    options: baseOptions({ layout:{padding:{top:22}}, scales: baseScales({ x:{ grid:{display:false}, ticks:Object.assign({color:c.text, callback:(v,i)=>vessels[i%vessels.length]},NO_ROTATE) } }) })
   });
 }
 function renderCharterTable(){
@@ -892,7 +936,7 @@ function buildMtCharts(){
       {label:'절감량', data: saved, type:'line', borderColor:c.pink, backgroundColor:c.pink, tension:0, pointRadius:2, borderWidth:2, order:1, yAxisID:'y'},
     ]},
     options: baseOptions({ scales: baseScales({
-      x:{ grid:{display:false}, ticks:Object.assign({color:c.text}, NO_ROTATE) },
+      x:{ grid:{display:true, color:c.grid, drawTicks:false}, ticks:Object.assign({color:c.text}, NO_ROTATE) },
       y:{ ticks:{color:c.text, callback:(v)=>v+'톤'} }
     }) })
   });
@@ -903,7 +947,7 @@ function buildMtCharts(){
       {label:'절감액(백만원)', data: savedAmount, borderColor:c.green, backgroundColor:c.greenFill, tension:0, pointRadius:2, borderWidth:2, fill:true},
     ]},
     options: baseOptions({ scales: baseScales({
-      x:{ grid:{display:false}, ticks:Object.assign({color:c.text}, NO_ROTATE) },
+      x:{ grid:{display:true, color:c.grid, drawTicks:false}, ticks:Object.assign({color:c.text}, NO_ROTATE) },
       y:{ ticks:{color:c.text, callback:(v)=>v.toLocaleString()+'백만'} }
     }) })
   });
@@ -1093,12 +1137,11 @@ document.addEventListener("DOMContentLoaded", function(){
       if (!anchor || !anchor.parentElement) return;
       var btn = document.createElement("button");
       btn.id = "authLogoutBtn";
-      btn.className = "icon-btn auth-logout-btn";
+      btn.className = "auth-logout-btn";
       btn.type = "button";
       btn.title = "로그아웃 (" + user.email + ")";
       btn.setAttribute("aria-label", "로그아웃");
-      btn.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>';
+      btn.textContent = "로그아웃";
       btn.addEventListener("click", function () {
         auth.signOut();
       });
