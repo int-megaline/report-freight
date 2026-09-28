@@ -889,7 +889,7 @@ function buildVesselCharts(){
 function renderCharterTable(){
   const rows = [];
   ["2025","2026"].forEach(yr=>{
-    ["총","메가트러스트","메가패션"].forEach(v=>{
+    ["Total","METR","MEPA","Total","METR","MEPA"].forEach(v=>{
       let d;
       if(v==="총"){
         d = { voy: vesselSum(yr,"voy"), reentry: vesselSum(yr,"reentry"), billed: vesselSum(yr,"billed"),
