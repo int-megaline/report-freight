@@ -432,11 +432,10 @@ footer.page-foot{
       <h3>월별 유류 단가 · 환율</h3>
       <p class="desc">좌측 축: 원/리터 (VLSFO, LSMGO) · 우측 축: 원/달러 환율</p>
       <div class="chart-box" style="height:320px;"><canvas id="chartFuelPrice"></canvas></div>
-      <p class="legend-note">2026-10 ~ 2026-12 구간은 외부 전망 자료 기반 잠정치임 (점선 표기, 호르무즈발 공급 차질 완화·유가 정상화 시나리오 반영)</p>
     </div>
   </div>
   <p class="footnote">출처: <a href="https://docs.google.com/spreadsheets/d/1kVC1hr6Hf81kdIj1rA-iNObXLUYaHfJBLR0wXr8EuE4/edit?gid=0#gid=0" target="_blank" rel="noopener">연간 용선료 청구 현황 (Google Sheets) — 2. 유류 사용량 및 관련 정보 · 1) 유류 단가 및 환율</a></p>
-  <p class="footnote">2026-10~12월 전망치 참고자료: <a href="https://shipandbunker.com/" target="_blank" rel="noopener">Ship &amp; Bunker</a>, <a href="https://www.keei.re.kr/" target="_blank" rel="noopener">에너지경제연구원(KEEI)</a>, <a href="https://www.bunkerindex.com/" target="_blank" rel="noopener">Bunker Index</a>, <a href="https://obank.kbstar.com/quics?page=C101426" target="_blank" rel="noopener">KB국민은행 환율전망</a> (2026-09-25 조회 기준, 부산항 VLSFO/MGO 현물가 및 Q4 유가·환율 전망 반영)</p>
+  <p class="footnote">2026-10~12월 전망치 참고자료: <a href="https://shipandbunker.com/" target="_blank" rel="noopener">Ship &amp; Bunker</a>, <a href="https://www.bunkerindex.com/" target="_blank" rel="noopener">Bunker Index</a>, <a href="https://obank.kbstar.com/quics?page=C101426" target="_blank" rel="noopener">KB국민은행 환율전망</a> (2026-09-25 조회 기준, 부산항 VLSFO/MGO 현물가 및 Q4 유가·환율 전망 반영)</p>
 </section>
 
 <section id="savings">
@@ -852,6 +851,10 @@ function buildVesselCharts(){
       }
     });
   });
+  const stackOpts = baseOptions({ layout:{padding:{top:22}}, scales: baseScales({ x:{ stacked:true, grid:{display:false}, ticks:Object.assign({color:c.text},NO_ROTATE,{autoSkip:false,font:{weight:'600'}}) }, y:{ stacked:true, ticks:{color:c.text, callback:(v)=>v+'억'} } }) });
+  stackOpts.plugins.tooltip.callbacks = {
+    footer: (items) => { const sum = items.reduce((s,it)=>s+it.parsed.y, 0); return '합계: ' + sum.toLocaleString('ko-KR',{minimumFractionDigits:1,maximumFractionDigits:1}) + '억'; }
+  };
   makeChart("chartCharterStack", {
     type:'bar',
     plugins:[yearGroupPlugin(years, vessels.length)],
@@ -860,7 +863,7 @@ function buildVesselCharts(){
       barDS('연료비', fuel, c.green, c.greenFill, {stack:'s'}),
       barDS('운항비(기타포함)', opex, c.pink, c.pinkFill, {stack:'s'}),
     ]},
-    options: baseOptions({ layout:{padding:{top:22}}, scales: baseScales({ x:{ stacked:true, grid:{display:false}, ticks:Object.assign({color:c.text},NO_ROTATE) }, y:{ stacked:true, ticks:{color:c.text, callback:(v)=>v+'억'} } }) })
+    options: stackOpts
   });
 
   const voyLabels = [];
@@ -883,13 +886,13 @@ function buildVesselCharts(){
       barDS('항차 수', voy, c.blue, c.blueFill),
       barDS('재입항', reentry, c.pink, c.pinkFill),
     ]},
-    options: baseOptions({ layout:{padding:{top:22}}, scales: baseScales({ x:{ grid:{display:false}, ticks:Object.assign({color:c.text},NO_ROTATE) } }) })
+    options: baseOptions({ layout:{padding:{top:22}}, scales: baseScales({ x:{ grid:{display:false}, ticks:Object.assign({color:c.text},NO_ROTATE,{autoSkip:false,font:{weight:'600'}}) } }) })
   });
 }
 function renderCharterTable(){
   const rows = [];
   ["2025","2026"].forEach(yr=>{
-    ["Total","METR","MEPA","Total","METR","MEPA"].forEach(v=>{
+    ["총","메가트러스트","메가패션"].forEach(v=>{
       let d;
       if(v==="총"){
         d = { voy: vesselSum(yr,"voy"), reentry: vesselSum(yr,"reentry"), billed: vesselSum(yr,"billed"),
@@ -957,19 +960,23 @@ function buildFuelPriceChart(){
 function buildTotalSavingsChart(){
   const c = chartColors();
   const cs = DATA.combined_savings;
+  const tsOpts = baseOptions({
+    indexAxis:'y',
+    scales:{
+      x:{ stacked:true, grid:{color:c.grid}, ticks:Object.assign({color:c.text, callback:(v)=>v.toLocaleString()+'백만'}, NO_ROTATE), beginAtZero:true },
+      y:{ stacked:true, grid:{display:true, color:c.grid, drawTicks:false}, ticks:{color:c.text} }
+    }
+  });
+  tsOpts.plugins.tooltip.callbacks = {
+    footer: (items) => { const sum = items.reduce((s,it)=>s+it.parsed.x, 0); return '합계: ' + fmtWon(sum*1e6); }
+  };
   makeChart("chartTotalSavings", {
     type:'bar',
     data:{ labels:['2025년 (연간 합계)','2026년 (누적)'], datasets:[
       barDS('메가트러스트(절감액)', [cs["2025"].mt/1e6, cs["2026"].mt/1e6], c.blue, c.blueFill, {stack:'s'}),
       barDS('메가패션(성과금)', [cs["2025"].mepa/1e6, cs["2026"].mepa/1e6], c.green, c.greenFill, {stack:'s'}),
     ]},
-    options: baseOptions({
-      indexAxis:'y',
-      scales:{
-        x:{ stacked:true, grid:{color:c.grid}, ticks:Object.assign({color:c.text, callback:(v)=>v.toLocaleString()+'백만'}, NO_ROTATE), beginAtZero:true },
-        y:{ stacked:true, grid:{display:true, color:c.grid, drawTicks:false}, ticks:{color:c.text} }
-      }
-    })
+    options: tsOpts
   });
 }
 
